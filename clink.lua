@@ -1,21 +1,106 @@
--- default script for clink, called by clink.lua
+----------------------
+-- package requires --
+----------------------
 
--- now add our own things...
+-- https://stackoverflow.com/a/11869077
+-- https://stackoverflow.com/a/5761649
+package.path = package.path .. ';' .. clink.get_env('ClinkLuaPath') .. '/?.lua'
 
----
- -- Setting the prompt in clink means that commands which rewrite the prompt do
- -- not destroy our own prompt. It also means that started cmds (or batch files
- -- which echo) don't get the ugly '{lamb}' shown.
----
-function set_prompt_filter()
-    -- get_cwd() is differently encoded than the clink.prompt.value, so everything other than
-    -- pure ASCII will get garbled. So try to parse the current directory from the original prompt
-    -- and only if that doesn't work, use get_cwd() directly.
-    -- The matching relies on the default prompt which ends in X:\PATH\PATH>
-    -- (no network path possible here!)
+local inspect = require 'inspect'
+local ansic = require 'ansicolors'
+local utils = require 'utils'
+local make_section_hg = require 'section_hg'
+local make_section_git = require 'section_git'
+
+---- attributes
+--local reset      = ansic.reset      -- = 0
+--local clear      = ansic.clear      -- = 0
+--local default    = ansic.default    -- = 0
+--local bright     = ansic.bright     -- = 1
+--local dim        = ansic.dim        -- = 2
+--local underscore = ansic.underscore -- = 4
+--local blink      = ansic.blink      -- = 5
+--local reverse    = ansic.reverse    -- = 7
+--local hidden     = ansic.hidden     -- = 8
+--
+---- foreground
+--local black   = ansic.black   -- = 30
+--local red     = ansic.red     -- = 31
+--local green   = ansic.green   -- = 32
+--local yellow  = ansic.yellow  -- = 33
+--local blue    = ansic.blue    -- = 34
+--local magenta = ansic.magenta -- = 35
+--local cyan    = ansic.cyan    -- = 36
+--local white   = ansic.white   -- = 37
+--
+---- background
+--local onblack   = ansic.onblack   -- = 40
+--local onred     = ansic.onred     -- = 41
+--local ongreen   = ansic.ongreen   -- = 42
+--local onyellow  = ansic.onyellow  -- = 43
+--local onblue    = ansic.onblue    -- = 44
+--local onmagenta = ansic.onmagenta -- = 45
+--local oncyan    = ansic.oncyan    -- = 46
+--local onwhite   = ansic.onwhite   -- = 47
+
+-- C:\Users\XXX\a\b\c => ~\a\b\c
+local user_profile = clink.get_env('USERPROFILE'):pattern_escape()
+local is_admin = clink.get_env('ConEmuIsAdmin') == 'ADMIN'
+
+-- symbols
+local symbols = utils.symbols
+
+-- this gets assigned after function declarations
+local prompt_sections
+
+local function color_fg(section)
+    return ansic[section.fg]
+end
+
+local function color_bg(section)
+    return ansic['on' .. section.bg]
+end
+
+local function color_bg_as_fg(section)
+    return ansic[section.bg]
+end
+
+local function pad1(str)
+    return ' ' .. str .. ' '
+end
+
+function master_prompt_filter()
     local old_prompt = clink.prompt.value
-    local cwd = old_prompt:match('.*(.:[^>]*)>')
-    if cwd == nil then cwd = clink.get_cwd() end
+    local sections = {}
+    local i = 1
+    for _, make_section in ipairs(prompt_sections) do
+        local prompt = make_section(old_prompt)
+        if prompt then
+            sections[i] = prompt
+            i = i + 1
+        end
+    end
+    
+    local f = sections[1]
+    -- put the first value
+    local prompt = color_fg(f) .. color_bg(f) .. pad1(f.value)
+    local num_sections = #sections
+    -- merge rest of sections if there are any
+    if num_sections ~= 1 then
+        for i=2,num_sections do
+            local prev = sections[i-1]
+            local cur = sections[i]
+            -- reset colors, then color the foreground with the previous section's color, which is
+            -- used as the divider's color; the background is set to the current background so it
+            -- shows up behind the divider, then the foreground is set after the divider is printed.
+            -- then, we put the value in.
+            prompt = prompt .. ansic.reset .. color_bg_as_fg(prev) .. color_bg(cur) .. symbols.divider .. color_fg(cur) .. pad1(cur.value)
+        end
+    end
+    
+    -- append the trailing divider for the last section
+    local l = sections[num_sections]
+    prompt = prompt .. ansic.reset .. color_bg_as_fg(l) .. ansic.onblack .. symbols.divider
     
     -- environment systems like pythons virtualenv change the PROMPT and usually
     -- set some variable. But the variables are differently named and we would never
@@ -25,246 +110,57 @@ function set_prompt_filter()
     -- also check for square brackets
     if env == nil then env = old_prompt:match('.*%[([^%]]+)%].+:') end
     
+    -- TODO append dim date to end of first prompt line like https://cloud.githubusercontent.com/assets/53660/16141569/ee2bbe4a-3411-11e6-85dc-3d9b0226e833.png
+    clink.prompt.value = (prompt .. '\n{#bright_black,onblack}{lambda} {#reset}')
+        :ansicolor()
+        :with({
+            lambda = env == nil and 'λ' or '('..env..') λ'
+        })
+end
+
+function user_prompt_section(old_prompt)
+    if not is_admin then return nil end
+    return {
+        fg = 'bright_white',
+        bg = 'magenta',
+        value = symbols.is_admin .. ' Admin'
+    }
+end
+
+---
+ -- Setting the prompt in clink means that commands which rewrite the prompt do
+ -- not destroy our own prompt. It also means that started cmds (or batch files
+ -- which echo) don't get the ugly '{lamb}' shown.
+---
+function cwd_prompt_section(old_prompt)
+    -- get_cwd() is differently encoded than the clink.prompt.value, so everything other than
+    -- pure ASCII will get garbled. So try to parse the current directory from the original prompt
+    -- and only if that doesn't work, use get_cwd() directly.
+    -- The matching relies on the default prompt which ends in X:\PATH\PATH>
+    -- (no network path possible here!)
+    local cwd = clink.prompt.value:match('.*(.:[^>]*)>') or clink.get_cwd()
+    --local cwd = clink.get_cwd()
+    
     -- build our own prompt
-    -- orig: $E[1;32;40m$P$S{git}{hg}$S$_$E[1;30;40m{lamb}$S$E[0m
-    -- color codes: "\x1b[1;37;40m"
-    local cmder_prompt = "\x1b[1;32;40m{cwd} {git}{hg} \n\x1b[1;30;40m{lamb} \x1b[0m"
-    cmder_prompt = string.gsub(cmder_prompt, "{cwd}", cwd)
-    if env == nil then
-        lambda = "λ"
-    else
-        lambda = "("..env..") λ"
-    end
-    clink.prompt.value = string.gsub(cmder_prompt, "{lamb}", lambda)
-end
-
----
- -- Resolves closest directory location for specified directory.
- -- Navigates subsequently up one level and tries to find specified directory
- -- @param  {string} path    Path to directory will be checked. If not provided
- --                          current directory will be used
- -- @param  {string} dirname Directory name to search for
- -- @return {string} Path to specified directory or nil if such dir not found
-local function get_dir_contains(path, dirname)
-
-    -- return parent path for specified entry (either file or directory)
-    local function pathname(path)
-        local prefix = ""
-        local i = path:find("[\\/:][^\\/:]*$")
-        if i then
-            prefix = path:sub(1, i-1)
-        end
-        return prefix
-    end
-
-    -- Navigates up one level
-    local function up_one_level(path)
-        if path == nil then path = '.' end
-        if path == '.' then path = clink.get_cwd() end
-        return pathname(path)
-    end
-
-    -- Checks if provided directory contains git directory
-    local function has_specified_dir(path, specified_dir)
-        if path == nil then path = '.' end
-        local found_dirs = clink.find_dirs(path..'/'..specified_dir)
-        if #found_dirs > 0 then return true end
-        return false
-    end
-
-    -- Set default path to current directory
-    if path == nil then path = '.' end
-
-    -- If we're already have .git directory here, then return current path
-    if has_specified_dir(path, dirname) then
-        return path..'/'..dirname
-    else
-        -- Otherwise go up one level and make a recursive call
-        local parent_path = up_one_level(path)
-        if parent_path == path then
-            return nil
-        else
-            return get_dir_contains(parent_path, dirname)
-        end
-    end
-end
-
-local function get_hg_dir(path)
-    return get_dir_contains(path, '.hg')
-end
-
--- adapted from from clink-completions' git.lua
-local function get_git_dir(path)
-
-    -- return parent path for specified entry (either file or directory)
-    local function pathname(path)
-        local prefix = ""
-        local i = path:find("[\\/:][^\\/:]*$")
-        if i then
-            prefix = path:sub(1, i-1)
-        end
-        return prefix
-    end
-
-    -- Checks if provided directory contains git directory
-    local function has_git_dir(dir)
-        return #clink.find_dirs(dir..'/.git') > 0 and dir..'/.git'
-    end
-
-    local function has_git_file(dir)
-        local gitfile = io.open(dir..'/.git')
-        if not gitfile then return false end
-
-        local git_dir = gitfile:read():match('gitdir: (.*)')
-        gitfile:close()
-
-        return git_dir and dir..'/'..git_dir
-    end
-
-    -- Set default path to current directory
-    if not path or path == '.' then path = clink.get_cwd() end
-
-    -- Calculate parent path now otherwise we won't be
-    -- able to do that inside of logical operator
-    local parent_path = pathname(path)
-
-    return has_git_dir(path)
-        or has_git_file(path)
-        -- Otherwise go up one level and make a recursive call
-        or (parent_path ~= path and get_git_dir(parent_path) or nil)
-end
-
----
- -- Find out current branch
- -- @return {false|mercurial branch name}
----
-function get_hg_branch()
-    for line in io.popen("hg identify -b 2>nul"):lines() do
-        local m = line:match("(.+)$")
-        if m then
-            return m
-        end
-    end
-
-    return false
-end
-
----
- -- Get the status of working dir
- -- @return {bool}
----
-function get_hg_status()
-    for line in io.popen("hg status -0"):lines() do
-       return false
-    end
-    return true
-end
-
-function hg_prompt_filter()
-
-    -- Colors for mercurial status
-    local colors = {
-        clean = "\x1b[1;37;40m",
-        dirty = "\x1b[31;1m",
+    return {
+        fg = 'bright_white',
+        bg = 'blue',
+        value = cwd:gsub(user_profile, '~')
     }
-
-    if get_hg_dir() then
-        -- if we're inside of mercurial repo then try to detect current branch
-        local branch = get_hg_branch()
-        if branch then
-            -- Has branch => therefore it is a mercurial folder, now figure out status
-            --if get_hg_status() then
-            --    color = colors.clean
-            --else
-            --    color = colors.dirty
-            --end
-
-            clink.prompt.value = string.gsub(clink.prompt.value, "{hg}", colors.clean.."("..branch..")")
-        else
-            clink.prompt.value = string.gsub(clink.prompt.value, "{hg}", colors.clean.."("..branch..")")
-        end
-        return false
-    end
-
-    -- No mercurial present or not in mercurial file
-    clink.prompt.value = string.gsub(clink.prompt.value, "{hg}", "")
-    return false
 end
 
----
- -- Find out current branch
- -- @return {nil|git branch name}
----
-function get_git_branch(git_dir)
-    local git_dir = git_dir or get_git_dir()
-
-    -- If git directory not found then we're probably outside of repo
-    -- or something went wrong. The same is when head_file is nil
-    local head_file = git_dir and io.open(git_dir..'/HEAD')
-    if not head_file then return end
-
-    local HEAD = head_file:read()
-    head_file:close()
-
-    -- if HEAD matches branch expression, then we're on named branch
-    -- otherwise it is a detached commit
-    local branch_name = HEAD:match('ref: refs/heads/(.+)')
-    return branch_name or 'HEAD detached at '..HEAD:sub(1, 7)
-end
-
----
- -- Get the status of working dir
- -- @return {bool}
----
-function get_git_status()
-    for line in io.popen("git status --porcelain 2>nul"):lines() do
-        return false
-    end
-    return true
-end
-
-function git_prompt_filter()
-
-    -- Colors for git status
-    local colors = {
-        clean = "\x1b[1;37;40m",
-        dirty = "\x1b[31;1m",
-    }
-
-    local git_dir = get_git_dir()
-    if git_dir then
---        -- if we're inside of git repo then try to detect current branch
-        local branch = get_git_branch(git_dir)
-        if branch then
-            clink.prompt.value = string.gsub(clink.prompt.value, "{git}", colors.clean.."("..branch..")")
-        else
-            clink.prompt.value = string.gsub(clink.prompt.value, "{git}", colors.clean.."(branch n/a)")
-        end
-        return false
---        if branch then
---            -- Has branch => therefore it is a git folder, now figure out status
---            if get_git_status() then
---                color = colors.clean
---            else
---                color = colors.dirty
---            end
---
---            clink.prompt.value = string.gsub(clink.prompt.value, "{git}", color.."("..branch..")")
---            return false
---        end
-    end
-
-    -- No git present or not in git file
-    clink.prompt.value = string.gsub(clink.prompt.value, "{git}", "")
-    return false
-end
+-- create prompt sections
+prompt_sections = {
+    user_prompt_section,
+    cwd_prompt_section,
+    make_section_hg,
+    make_section_git,
+}
 
 -- insert the set_prompt at the very beginning so that it runs first
-clink.prompt.register_filter(set_prompt_filter, 1)
-clink.prompt.register_filter(hg_prompt_filter, 50)
-clink.prompt.register_filter(git_prompt_filter, 50)
+clink.prompt.register_filter(master_prompt_filter, 1)
 
-local completions_dir = clink.get_env('ConEmuDir') .. '/_user/clink/clink-completions/'
+local completions_dir = clink.get_env('ClinkLuaPath') .. '/clink-completions/'
 for _,lua_module in ipairs(clink.find_files(completions_dir..'*.lua')) do
     -- Skip files that starts with _. This could be useful if some files should be ignored
     if not string.match(lua_module, '^_.*') then
@@ -274,4 +170,3 @@ for _,lua_module in ipairs(clink.find_files(completions_dir..'*.lua')) do
         dofile(filename)
     end
 end
-
