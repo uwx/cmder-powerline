@@ -81,38 +81,74 @@ local function get_merge_targets(git_dir)
     return table.concat(targets, ', ')
 end
 
+local function is_index_dirty(git_dir)
+    git_dir = git_dir or get_git_dir()
+    
+    return io.popen('git diff-index --quiet HEAD --'):close() ~= 0
+end
+
 local function make_section(old_prompt)
 
     -- Colors for git status
     local colors = {
         clean = 'green',
         dirty = 'yellow',
+        critical = 'red',
     }
     
     local git_dir = get_git_dir()
     if git_dir then
---        -- if we're inside of git repo then try to detect current branch
+        -- if we're inside of git repo then try to detect current branch
         local branch = get_git_branch(git_dir)
         local merge_targets = get_merge_targets(git_dir) or get_merge_head(git_dir)
+        local git_config = utils.load_ini(git_dir .. '/config')
+        local dirty = is_index_dirty(git_dir)
         
         local value = branch or (symbols.no_branch_found .. ' branch n/a')
         
+        if dirty then
+            value = value .. ' ' .. symbols.staged_changes
+        end
+        
+        -- show 'branch -> origin/other_branch' or 'branch -> origin' for same branch
+        if branch and git_config then
+            local remote = utils.get_config(git_config, 'branch "%s"' % branch, 'remote')
+            local remote_branch = utils.get_config(git_config, 'remote "%s"' % remote, 'push') 
+                                  or utils.get_config(git_config, 'push', 'default')
+            
+            if remote_branch and remote_branch ~= branch then
+                value = value .. ' ' .. symbols.right_arrow .. ' ' .. (remote or 'remote') .. '/' .. remote_branch
+            elseif remote then
+                value = value .. ' ' .. symbols.right_arrow .. ' ' .. remote
+            end
+        end
+        
+        -- detect merge targets
         if merge_targets then
             value = value .. ' ' .. symbols.merging .. ' ' .. merge_targets
         end
         
         if branch then
-            return {
-                bright = true,
-                fg = 'bright_white',
-                bg = colors.clean,
-                value = value
-            }--TODO merging thing, also display index clean/dirty, and NPM
+            if dirty then
+                return {
+                    bright = true,
+                    fg = 'bright_white',
+                    bg = colors.dirty,
+                    value = value
+                }
+            else
+                return {
+                    bright = true,
+                    fg = 'bright_white',
+                    bg = colors.clean,
+                    value = value
+                }
+            end
         else
             return {
                 bright = false,
-                fg = 'bright_black',
-                bg = colors.dirty,
+                fg = 'bright_white',
+                bg = colors.critical,
                 value = value
             }
         end

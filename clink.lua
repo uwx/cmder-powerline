@@ -160,13 +160,15 @@ prompt_sections = {
 -- insert the set_prompt at the very beginning so that it runs first
 clink.prompt.register_filter(master_prompt_filter, 1)
 
-local completions_dir = clink.get_env('ClinkLuaPath') .. '/clink-completions/'
-for _,lua_module in ipairs(clink.find_files(completions_dir..'*.lua')) do
-    -- Skip files that starts with _. This could be useful if some files should be ignored
-    if not string.match(lua_module, '^_.*') then
-        local filename = completions_dir..lua_module
-        -- use dofile instead of require because require caches loaded modules
-        -- so config reloading using Alt-Q won't reload updated modules.
-        dofile(filename)
-    end
-end
+require "clink-completions.!init"
+require "clink-completions.angular-cli"
+require "clink-completions.chocolatey"
+require "clink-completions.coho"
+require "clink-completions.cordova"
+require "clink-completions.git"
+require "clink-completions.net"
+require "clink-completions.npm"
+require "clink-completions.nvm"
+require "clink-completions.ssh"
+require "clink-completions.vagrant"
+require "clink-completions.yarn"

@@ -8,6 +8,20 @@ local exports = {}
 -- builtin extensions --
 ------------------------
 
+getmetatable('').__mod = function(str, args)
+    if not args then
+        return str
+    elseif type(args) == 'table' then
+        if args[1] then -- array
+            return str:format(unpack(args))
+        else -- not array, likely key-value map, delegate to our string.with extension
+            return str:with(args)
+        end
+    else
+        return str:format(args)
+    end
+end
+
 --[[
     Performs string interpolation on a string
 
@@ -283,6 +297,67 @@ function exports.read_all_lines(file)
     return file_lines
 end
 
+--[[
+    Loads an INI file into an object indexed by INI section and parameter key.
+    
+    Parameters:
+        fileName(string): the file to load
+        
+    Returns:
+        table indexing INI file, based on result[section][param] = value
+        
+    References:
+        https://github.com/Dynodzzo/Lua_INI_Parser/blob/master/LIP.lua
+]]
+function exports.load_ini(fileName)
+    assert(type(fileName) == 'string', 'Parameter "fileName" must be a string.')
+    local file = io.open(fileName, 'r')
+    if not file then return nil end
+
+    local data = {};
+    local section;
+    for line in file:lines() do
+        local tempSection = line:match('^%[([^%[%]]+)%]$');
+        if tempSection then
+            section = tonumber(tempSection) and tonumber(tempSection) or tempSection;
+            data[section] = data[section] or {}
+        end
+
+        local param, value = line:match('^%s-([%w|_]+)%s-=%s+(.+)$')
+        if(param and value ~= nil)then
+            if(tonumber(value))then
+                value = tonumber(value);
+            elseif(value == 'true')then
+                value = true;
+            elseif(value == 'false')then
+                value = false;
+            end
+            if(tonumber(param))then
+                param = tonumber(param);
+            end
+            data[section][param] = value
+        end
+    end
+    file:close();
+    return data;
+end
+
+--[[
+    Gets a config item from a table previously loaded by using load_ini.
+    
+    Parameters:
+        ini(table): the ini table
+        section(string): the ini section in which the key being looked up is located
+        key(string): the key whose value is being looked up
+        
+    Returns:
+        the value of ini[section][key] or nil if either the key or section aren't present
+]]
+function exports.get_config(ini, section, key)
+    local l = ini[section]
+    return l and l[key] or nil
+end
+
 -----------------
 -- other stuff --
 -----------------
@@ -306,6 +381,7 @@ exports.symbols = {
     unpulled_commits = u'f175', -- unpulled remote commits icon
     staged_changes = '*',
     is_admin = u'e00a', -- running prompt as admin icon
+    right_arrow = u'fc32', -- arrow pointing right, git remote target icon
 }
 
 
