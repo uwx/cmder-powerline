@@ -20,7 +20,7 @@ local function get_hg_branch() -- TODO uncommand this
     return false
 end
 
-local function make_section(old_prompt)
+return function(old_prompt)
 
     -- Colors for mercurial status
     local colors = {
@@ -29,19 +29,17 @@ local function make_section(old_prompt)
         critical = 'red',
     }
 
-    if get_hg_dir() then
+    if get_hg_dir(nil) then
         -- if we're inside of mercurial repo then try to detect current branch
         local branch = get_hg_branch()
         if branch then
             return {
-                bright = true,
                 fg = 'bright_white',
                 bg = colors.clean,
                 value = symbols.branch .. ' ' .. branch
             }
         else
             return {
-                bright = true,
                 fg = 'bright_white',
                 bg = colors.critical,
                 value = symbols.no_branch_found .. ' branch n/a'
@@ -52,5 +50,3 @@ local function make_section(old_prompt)
     -- No mercurial present or not in mercurial file
     return nil
 end
-
-return make_section

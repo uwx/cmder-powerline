@@ -9,8 +9,13 @@ package.path = package.path .. ';' .. clink.get_env('ClinkLuaPath') .. '/?.lua'
 local inspect = require 'inspect'
 local ansic = require 'ansicolors'
 local utils = require 'utils'
+local config = require 'config'
 local make_section_hg = require 'section_hg'
 local make_section_git = require 'section_git'
+local make_section_npm = require 'section_npm'
+
+local date_time_enabled = config.date_time_enabled
+local date_time_format = config.date_time_format
 
 ---- attributes
 --local reset      = ansic.reset      -- = 0
@@ -54,19 +59,40 @@ local symbols = utils.symbols
 local prompt_sections
 
 local function color_fg(section)
-    return ansic[section.fg]
+    return ansic[section.fg] or error('no color ansic.' .. section.fg .. '!')
 end
 
 local function color_bg(section)
-    return ansic['on' .. section.bg]
+    return ansic['on' .. section.bg] or error('no color ansic.on' .. section.bg .. '!')
 end
 
 local function color_bg_as_fg(section)
-    return ansic[section.bg]
+    return ansic[section.bg] or error('no color ansic.' .. section.bg .. '!')
 end
 
 local function pad1(str)
-    return ' ' .. str .. ' '
+    return str and ' ' .. str .. ' ' or error('value is nil: [[' .. str .. ']]!')
+end
+
+local function gen_spaces(count)
+    return string.rep(' ', count)
+end
+
+--[[
+    Places a string at the right side of the terminal screen. This operation can only be done once
+    in a line, and you may not draw to the same line afterwards. ANSI escapes are accounted for.
+    
+    Parameters:
+        source(string): the string occupying the left side of the terminal
+        target(string): the string to place at the right side of the terminal
+        
+    Returns(string):
+        string consisting of source + spaces + target at the right side
+]]
+local function place_right_side(source, target)
+    local screen_info = clink.get_screen_info()
+    
+    return source .. gen_spaces(screen_info.buffer_width - target:ansi_len() - source:ansi_len()) .. target
 end
 
 function master_prompt_filter()
@@ -109,6 +135,12 @@ function master_prompt_filter()
     local env = old_prompt:match('.*%(([^%)]+)%).+:')
     -- also check for square brackets
     if env == nil then env = old_prompt:match('.*%[([^%]]+)%].+:') end
+    
+    if date_time_enabled then
+        local date_time = (ansic.bright_black .. os.date(date_time_format))
+        
+        prompt = place_right_side(prompt, date_time)
+    end
     
     -- TODO append dim date to end of first prompt line like https://cloud.githubusercontent.com/assets/53660/16141569/ee2bbe4a-3411-11e6-85dc-3d9b0226e833.png
     clink.prompt.value = (prompt .. '\n{#bright_black,onblack}{lambda} {#reset}')
@@ -153,6 +185,7 @@ end
 prompt_sections = {
     user_prompt_section,
     cwd_prompt_section,
+    make_section_npm,
     make_section_hg,
     make_section_git,
 }
@@ -160,15 +193,15 @@ prompt_sections = {
 -- insert the set_prompt at the very beginning so that it runs first
 clink.prompt.register_filter(master_prompt_filter, 1)
 
-require "clink-completions.!init"
-require "clink-completions.angular-cli"
-require "clink-completions.chocolatey"
-require "clink-completions.coho"
-require "clink-completions.cordova"
-require "clink-completions.git"
-require "clink-completions.net"
-require "clink-completions.npm"
-require "clink-completions.nvm"
-require "clink-completions.ssh"
-require "clink-completions.vagrant"
-require "clink-completions.yarn"
+require 'clink-completions.!init'
+require 'clink-completions.angular-cli'
+require 'clink-completions.chocolatey'
+require 'clink-completions.coho'
+require 'clink-completions.cordova'
+require 'clink-completions.git'
+require 'clink-completions.net'
+require 'clink-completions.npm'
+require 'clink-completions.nvm'
+require 'clink-completions.ssh'
+require 'clink-completions.vagrant'
+require 'clink-completions.yarn'

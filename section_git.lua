@@ -1,7 +1,7 @@
 local utils = require 'utils'
 local symbols = utils.symbols
 
-local index_enabled = false
+local index_enabled = require 'config'.index_enabled
 
 local function git_file(dir)
     local contents = utils.read_first_line(dir..'/.git')
@@ -89,7 +89,7 @@ local function is_index_dirty(git_dir)
     return io.popen('git diff-index --quiet HEAD --'):close() ~= 0
 end
 
-local function make_section(old_prompt)
+return function(old_prompt)
 
     -- Colors for git status
     local colors = {
@@ -133,14 +133,12 @@ local function make_section(old_prompt)
         if branch then
             if dirty then
                 return {
-                    bright = true,
                     fg = 'bright_white',
                     bg = colors.dirty,
                     value = value
                 }
             else
                 return {
-                    bright = true,
                     fg = 'bright_white',
                     bg = colors.clean,
                     value = value
@@ -148,7 +146,6 @@ local function make_section(old_prompt)
             end
         else
             return {
-                bright = false,
                 fg = 'bright_white',
                 bg = colors.critical,
                 value = value
@@ -159,5 +156,3 @@ local function make_section(old_prompt)
     -- No git present or not in git file
     return nil
 end
-
-return make_section

@@ -8,6 +8,36 @@ local exports = {}
 -- builtin extensions --
 ------------------------
 
+--[[
+    Performs string interpolation on a string
+    
+    Parameters:
+        str(string): the string to format
+        args(any): the element to format with, or the table that contains elements for formatting
+            (see Example section for more details)
+    
+    Returns(string):
+        the formatted string
+    
+    Example:
+        Indexed parameters
+        print("Hello %s, the value of key %s is %s" % {name, k, v})
+    
+        Named parameters
+        print("{name} is {value}" % {name = "foo", value = "bar"})
+
+        Format strings
+        print("%5.2f" % math.pi)
+        
+        Indexed format strings
+        print("%-10.10s %04d" % { "test", 123 })
+        
+        TODO: named parameters with format strings
+        
+    References:
+        http://lua-users.org/wiki/StringInterpolation "Ruby- and Python-like string formatting with
+            % operator"
+]]
 getmetatable('').__mod = function(str, args)
     if not args then
         return str
@@ -29,7 +59,7 @@ end
         s(string): the string to format
         tab(table): the table that contains elements for formatting
     
-    Returns:
+    Returns(string):
         the formatted string
     
     Example:
@@ -43,7 +73,7 @@ end
         '7 into 28'
         
     References:
-        http://lua-users.org/wiki/StringInterpolation
+        http://lua-users.org/wiki/StringInterpolation "Named Parameters in Table"
 ]]
 function string.with(s, tab)
   return (s:gsub('(%b{})', function(w) return tab[w:sub(2, -2)] or w end))
@@ -55,7 +85,7 @@ end
     Parameters:
         str(string): the string to escape
 
-    Returns:
+    Returns(string):
         the escaped string
     
     References:
@@ -75,12 +105,12 @@ end
         sep(string): the char to split the string by, needs to be escaped with % if it is one of the
             following chars: ^$()%.[]*+-?
         
-    Returns:
+    Returns(table):
         table containing the input string split by the given separator; the inverse operation of
         `table.concat`
         
     References:
-        http://lua-users.org/wiki/SplitJoin
+        http://lua-users.org/wiki/SplitJoin ('local function csplit')
 ]]
 function string.split_char(str, sep)
    local ret={}
@@ -95,6 +125,37 @@ function string.split_char(str, sep)
 end
 
 --[[
+    Strips a string of any ANSI escape sequences.
+    
+    Parameters:
+        text(string): the string to remove ANSI sequences from
+        
+    Returns(string):
+        the string without ANSI sequences
+        
+    References:
+        https://stackoverflow.com/a/49209650
+]]
+function string.strip_ansi(text)
+    return text:gsub('[\27\155][][()#;?%d]*[A-PRZcf-ntqry=><~]', '')
+end
+
+--[[
+    Gets a string's length without counting any ANSI escape sequences. This function makes a version
+    of the string without ANSI sequences, and returns the length of that.
+    
+    Parameters:
+        text(string): the string to get the length of
+        
+    Returns(number):
+        the amount of characters in the string, not counting any characters belonging to any ANSI
+        escape sequences
+]]
+function string.ansi_len(text)
+    return utf8.len(text:strip_ansi())
+end
+
+--[[
     Given a table (or an iterator) and function, will return a new table where each key is mapped to
     the result of the function with the key's value (or iterator item) passed as its parameter.
     
@@ -103,7 +164,7 @@ end
         func(function(value,index,table)): the map function, takes three arguments: the value, the
             value's index and the original table.
     
-    Returns:
+    Returns(table):
         the new table
     
     Example:
@@ -138,7 +199,7 @@ end
         func(function(value,index,table)): the map function, takes three arguments: the value, the
             value's index and the table.
     
-    Returns:
+    Returns(table):
         the existing table
     
     Example:
@@ -164,15 +225,21 @@ end
         reset_at_end(boolean, optional): whether or not to append `ansic.reset` at the end of the
             string, default false
     
-    Returns:
+    Returns(string):
         the string with ANSI color escapes
     
     Example:
-        '{#bright,red}this is loud!':ansicolor()
+        '{#bright_red}this is loud!':ansicolor()
 
         results in
 
-        '[ansi bright escape sequence][ansi red escape sequence]this is loud!'
+        '[ansi bright red escape sequence]this is loud!'
+        
+    References:
+        http://lua-users.org/wiki/StringInterpolation "Named Parameters in Table"
+        
+    Remarks:
+        See ansicolors.lua for the list of allowed colors.
 ]]
 local ansi_color_token = string.byte('#')
 function string.ansicolor(s, reset_at_end)
@@ -249,6 +316,40 @@ function exports.get_dir_contains(path, dirname)
     end
 end
 
+local function file_exists(name)
+    local f = name and io.open(name, 'r')
+    if f ~= nil then
+        f:close()
+        return true
+    else
+        return false
+    end
+end
+
+function exports.has_specified_file(path, specified_file)
+    if path == nil then path = '.' end
+    return file_exists(path..'/'..specified_file)
+end
+
+function exports.get_file_contains(path, dirname)
+
+    -- Set default path to current directory
+    if path == nil then path = '.' end
+
+    -- If we're already have .git directory here, then return current path
+    if exports.has_specified_file(path, dirname) then
+        return path..'/'..dirname
+    else
+        -- Otherwise go up one level and make a recursive call
+        local parent_path = up_one_level(path)
+        if parent_path == path then
+            return nil
+        else
+            return exports.get_file_contains(parent_path, dirname)
+        end
+    end
+end
+
 --[[
     Reads the first line of a file.
     
@@ -295,6 +396,25 @@ function exports.read_all_lines(file)
     handle:close()
     
     return file_lines
+end
+
+--[[
+    Reads the entire text content of a file into a string.
+    
+    Parameters:
+        file(string): the file path to read
+    
+    Returns:
+        string containing the file's contents, or nil if the file does not exist or `file` is nil
+]]
+function exports.read_all_text(file)
+    local handle = file and io.open(file, 'r')
+    if not handle then return nil end
+
+    local line = handle:read('*a')
+    handle:close()
+    
+    return line
 end
 
 --[[
@@ -362,10 +482,23 @@ end
 -- other stuff --
 -----------------
 
+--[[
+    Prints an object as a string after running it through inspect.lua
+    
+    Parameters:
+        obj(any): the object to print
+        
+    Returns(void)
+    
+    References:
+        https://github.com/kikito/inspect.lua
+]]
 function exports.printi(obj)
     print(inspect(obj))
 end
 
+-- get utf8 char with hex code, u'XXXX' is analagous to '\uXXXX' in javascript (for BMP characters
+-- at least)
 local function u(c)
     return utf8.char(tonumber(c, 16))
 end
