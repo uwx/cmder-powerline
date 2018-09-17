@@ -1,6 +1,8 @@
 local utils = require 'utils'
 local symbols = utils.symbols
 
+local index_enabled = false
+
 local function git_file(dir)
     local contents = utils.read_first_line(dir..'/.git')
     if not contents then return false end
@@ -102,7 +104,7 @@ local function make_section(old_prompt)
         local branch = get_git_branch(git_dir)
         local merge_targets = get_merge_targets(git_dir) or get_merge_head(git_dir)
         local git_config = utils.load_ini(git_dir .. '/config')
-        local dirty = is_index_dirty(git_dir)
+        local dirty = index_enabled and is_index_dirty(git_dir) or nil
         
         local value = branch or (symbols.no_branch_found .. ' branch n/a')
         
