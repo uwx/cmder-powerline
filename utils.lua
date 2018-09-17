@@ -1,5 +1,5 @@
 local inspect = require 'inspect'
-local utf8 = require 'utf8string'
+local utf8 = require 'utf8'
 local ansic = require 'ansicolors'
 
 local exports = {}
@@ -137,6 +137,7 @@ end
         https://stackoverflow.com/a/49209650
 ]]
 function string.strip_ansi(text)
+    -- could maybe use utf8.gsub if there are encoding problems (none so far)
     return text:gsub('[\27\155][][()#;?%d]*[A-PRZcf-ntqry=><~]', '')
 end
 

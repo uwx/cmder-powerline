@@ -85,14 +85,18 @@ end
     Parameters:
         source(string): the string occupying the left side of the terminal
         target(string): the string to place at the right side of the terminal
+        offset(number): amount of space to leave at the right side of the terminal; generally you
+            want to set this to 1 if you want to include a line feed character after the text is
+            added.
         
     Returns(string):
         string consisting of source + spaces + target at the right side
 ]]
-local function place_right_side(source, target)
+local function place_right_side(source, target, offset)
     local screen_info = clink.get_screen_info()
+    offset = offset or 0
     
-    return source .. gen_spaces(screen_info.buffer_width - target:ansi_len() - source:ansi_len()) .. target
+    return source .. gen_spaces(screen_info.buffer_width - target:ansi_len() - source:ansi_len() - offset) .. target
 end
 
 function master_prompt_filter()
@@ -139,7 +143,7 @@ function master_prompt_filter()
     if date_time_enabled then
         local date_time = (ansic.bright_black .. os.date(date_time_format))
         
-        prompt = place_right_side(prompt, date_time)
+        prompt = place_right_side(prompt, date_time, 1)
     end
     
     -- TODO append dim date to end of first prompt line like https://cloud.githubusercontent.com/assets/53660/16141569/ee2bbe4a-3411-11e6-85dc-3d9b0226e833.png
