@@ -10,7 +10,7 @@ end
  -- @return {false|mercurial branch name}
 ---
 local function get_hg_branch() -- TODO uncommand this
-    for line in io.popen('hg identify -b 2>nul'):lines() do
+    for line in io.popen('hg branch'):lines() do
         local m = line:match('(.+)$')
         if m then
             return m
@@ -26,6 +26,7 @@ local function make_section(old_prompt)
     local colors = {
         clean = 'green',
         dirty = 'yellow',
+        critical = 'red',
     }
 
     if get_hg_dir() then
@@ -42,8 +43,8 @@ local function make_section(old_prompt)
             return {
                 bright = true,
                 fg = 'bright_white',
-                bg = colors.dirty,
-                value = '? branch n/a'
+                bg = colors.critical,
+                value = symbols.no_branch_found .. ' branch n/a'
             }
         end
     end
