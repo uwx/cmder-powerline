@@ -152,6 +152,8 @@ function master_prompt_filter()
         :with({
             lambda = env == nil and 'λ' or '('..env..') λ'
         })
+        
+    return true --prevent other filtering
 end
 
 function user_prompt_section(old_prompt)
