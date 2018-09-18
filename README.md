@@ -88,6 +88,10 @@ powerline-style prompt for cmder
     Then, you can press `Ctrl+Q` in your prompt to reload the script, or just start a new prompt.
     This will disable Mercurial branch display entirely.
 
+### Configuring
+Edit `config.lua` with a text editor, then press `Ctrl+Q` in your prompt to reload the script, or
+just start a new prompt.
+
 ### See also
 cmder-powerline was inspired by these prompts, so go check them out:
 
