@@ -197,7 +197,7 @@ prompt_sections = {
 }
 
 -- insert the set_prompt at the very beginning so that it runs first
-clink.prompt.register_filter(master_prompt_filter, 1)
+clink.prompt.register_filter(master_prompt_filter, 0)
 
 require 'clink-completions.!init'
 require 'clink-completions.angular-cli'
